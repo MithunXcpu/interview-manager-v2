@@ -1,0 +1,370 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================================
+// User & Authentication
+// =============================================================================
+
+model User {
+  id                  String   @id @default(cuid())
+  clerkId             String   @unique
+  email               String   @unique
+  name                String?
+  phone               String?
+  timezone            String   @default("America/Los_Angeles")
+  googleAccessToken   String?
+  googleRefreshToken  String?
+  googleTokenExpiry   DateTime?
+  onboardingComplete  Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  companies        Company[]
+  userStages       UserStage[]
+  emails           Email[]
+  availabilitySlots AvailabilitySlot[]
+  bookingLinks     BookingLink[]
+  emailTemplates   EmailTemplate[]
+  activityLogs     ActivityLog[]
+  wellnessCheckIns WellnessCheckIn[]
+  documents        Document[]
+}
+
+// =============================================================================
+// Pipeline Stages
+// =============================================================================
+
+model UserStage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stageKey  String
+  name      String
+  emoji     String
+  color     String
+  order     Int
+  isEnabled Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  companies Company[]
+
+  @@unique([userId, stageKey])
+  @@index([userId])
+}
+
+// =============================================================================
+// Companies & Pipeline
+// =============================================================================
+
+model Company {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userStageId      String?
+  userStage        UserStage? @relation(fields: [userStageId], references: [id], onDelete: SetNull)
+  name             String
+  jobTitle         String?
+  website          String?
+  location         String?
+  salaryMin        Float?
+  salaryMax        Float?
+  priority         Priority   @default(MEDIUM)
+  recruiterName    String?
+  recruiterEmail   String?
+  notes            String?
+  jobUrl           String?
+  appliedDate      DateTime?
+  lastActivityDate DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  interviews      Interview[]
+  emails          Email[]
+  research        CompanyResearch?
+  interviewPreps  InterviewPrep[]
+  offers          Offer[]
+  activityLogs    ActivityLog[]
+  documents       Document[]
+
+  @@index([userId])
+  @@index([userStageId])
+}
+
+// =============================================================================
+// Interviews
+// =============================================================================
+
+model Interview {
+  id                  String          @id @default(cuid())
+  companyId           String
+  company             Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title               String
+  scheduledAt         DateTime
+  duration            Int             @default(60)
+  type                InterviewType   @default(PHONE_SCREEN)
+  status              InterviewStatus @default(SCHEDULED)
+  meetingType         MeetingType?
+  meetingLink         String?
+  location            String?
+  interviewerName     String?
+  interviewerRole     String?
+  interviewerLinkedIn String?
+  notes               String?
+  feedback            String?
+  calendarEventId     String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([companyId])
+  @@index([scheduledAt])
+}
+
+// =============================================================================
+// Emails
+// =============================================================================
+
+model Email {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId       String?
+  company         Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  gmailId         String   @unique
+  threadId        String
+  from            String
+  to              String
+  subject         String
+  body            String?
+  snippet         String?
+  receivedAt      DateTime
+  isRead          Boolean  @default(false)
+  isRecruiterEmail Boolean @default(false)
+  detectedCompany String?
+  summary         String?
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([threadId])
+}
+
+// =============================================================================
+// Scheduling
+// =============================================================================
+
+model AvailabilitySlot {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayOfWeek Int     // 0=Sunday ... 6=Saturday
+  startTime String  // HH:MM format
+  endTime   String  // HH:MM format
+  isActive  Boolean @default(true)
+  timezone  String  @default("America/Los_Angeles")
+
+  @@index([userId])
+}
+
+model BookingLink {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug        String      @unique
+  title       String      @default("Quick Chat")
+  description String?
+  duration    Int         @default(30)
+  meetingType MeetingType @default(GOOGLE_MEET)
+  isActive    Boolean     @default(true)
+
+  @@index([userId])
+}
+
+// =============================================================================
+// Email Templates
+// =============================================================================
+
+model EmailTemplate {
+  id      String @id @default(cuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name    String
+  subject String
+  body    String
+  trigger String? // e.g., "after_interview", "follow_up"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// =============================================================================
+// Company Research (NEW)
+// =============================================================================
+
+model CompanyResearch {
+  id          String   @id @default(cuid())
+  companyId   String   @unique
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  website     String?
+  description String?
+  industry    String?
+  size        String?
+  founded     String?
+  techStack   String[]
+  recentNews  Json?
+  glassdoor   Json?
+  lastUpdated DateTime @default(now())
+
+  @@index([companyId])
+}
+
+// =============================================================================
+// Interview Prep (NEW)
+// =============================================================================
+
+model InterviewPrep {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type      String   // "briefing" | "questions" | "notes" | "reflection"
+  title     String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+// =============================================================================
+// Offers (NEW)
+// =============================================================================
+
+model Offer {
+  id               String      @id @default(cuid())
+  companyId        String
+  company          Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  baseSalary       Float?
+  equity           String?
+  equityValue      Float?
+  signingBonus     Float?
+  annualBonus      Float?
+  bonusTarget      String?
+  benefits         Json?
+  startDate        DateTime?
+  deadline         DateTime?
+  status           OfferStatus @default(PENDING)
+  notes            String?
+  negotiationNotes String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([companyId])
+}
+
+// =============================================================================
+// Activity Log (NEW)
+// =============================================================================
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([companyId])
+}
+
+// =============================================================================
+// Wellness Check-In (NEW)
+// =============================================================================
+
+model WellnessCheckIn {
+  id     String   @id @default(cuid())
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mood   Int      // 1-5
+  energy Int      // 1-5
+  notes  String?
+  date   DateTime @db.Date
+
+  @@unique([userId, date])
+  @@index([userId])
+}
+
+// =============================================================================
+// Documents (NEW)
+// =============================================================================
+
+model Document {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  title     String
+  type      String   // "briefing" | "cover_letter" | "thank_you" | "presentation" | "report"
+  format    String   // "pdf" | "docx" | "pptx" | "xlsx" | "epub" | "html"
+  content   String?  @db.Text
+  fileUrl   String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([companyId])
+}
+
+// =============================================================================
+// Enums
+// =============================================================================
+
+enum InterviewType {
+  PHONE_SCREEN
+  TECHNICAL
+  BEHAVIORAL
+  SYSTEM_DESIGN
+  CULTURE_FIT
+  PANEL
+  FINAL
+  OTHER
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+  NO_SHOW
+}
+
+enum MeetingType {
+  GOOGLE_MEET
+  ZOOM
+  PHONE
+  IN_PERSON
+  MICROSOFT_TEAMS
+}
+
+enum OfferStatus {
+  PENDING
+  NEGOTIATING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
